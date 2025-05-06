@@ -38,39 +38,32 @@
 
 // Libraries
 #include <lib/rover_control/RoverControl.hpp>
-#include <lib/slew_rate/SlewRate.hpp>
 #include <math.h>
 
 // uORB includes
 #include <uORB/Subscription.hpp>
 #include <uORB/Publication.hpp>
-#include <uORB/topics/actuator_motors.h>
-#include <uORB/topics/rover_steering_setpoint.h>
-#include <uORB/topics/rover_throttle_setpoint.h>
-#include <uORB/topics/manual_control_setpoint.h>
+#include <uORB/topics/vehicle_local_position.h>
+#include <uORB/topics/position_setpoint_triplet.h>
+#include <uORB/topics/rover_position_setpoint.h>
 
 /**
- * @brief Class for differential actuator control.
+ * @brief Class for differential auto mode.
  */
-class DifferentialActControl : public ModuleParams
+class DifferentialAutoMode : public ModuleParams
 {
 public:
 	/**
-	 * @brief Constructor for DifferentialActControl.
+	 * @brief Constructor for auto mode.
 	 * @param parent The parent ModuleParams object.
 	 */
-	DifferentialActControl(ModuleParams *parent);
-	~DifferentialActControl() = default;
+	DifferentialAutoMode(ModuleParams *parent);
+	~DifferentialAutoMode() = default;
 
 	/**
-	 * @brief Generate and publish actuatorMotors setpoints from roverThrottleSetpoint/roverSteeringSetpoint.
+	 * @brief Generate and publish roverPositionSetpoint from positionSetpointTriplet.
 	 */
-	void updateActControl();
-
-	/**
-	 * @brief Stop the vehicle by sending 0 commands to motors and servos.
-	 */
-	void stopVehicle();
+	void autoControl();
 
 protected:
 	/**
@@ -80,34 +73,29 @@ protected:
 
 private:
 	/**
-	 * @brief Compute normalized motor commands based on normalized setpoints.
-	 * @param throttle Normalized speed in body x direction [-1, 1].
-	 * @param speed_diff_normalized Speed difference between left and right wheels [-1, 1].
-	 * @return Motor speeds for the right and left motors [-1, 1].
+	 * @brief Calculate the speed at which the rover should arrive at the current waypoint. During waypoint transition the speed is restricted to
+	 * Maximum_speed * (1 - normalized_transition_angle * RM_MISS_VEL_GAIN).
+	 * @param cruising_speed Cruising speed [m/s].
+	 * @param waypoint_transition_angle Angle between the prevWP-currWP and currWP-nextWP line segments [rad]
+	 * @param max_speed Maximum speed setpoint [m/s]
+	 * @param trans_drv_trn Heading error threshold to switch from driving to turning [rad].
+	 * @param miss_spd_gain Tuning parameter for the speed reduction during waypoint transition.
+	 * @param curr_wp_type Type of the current waypoint.
+	 * @return Speed setpoint [m/s].
 	 */
-	Vector2f computeInverseKinematics(float throttle, float speed_diff_normalized);
+	float arrivalSpeed(const float cruising_speed, const float waypoint_transition_angle, const float max_speed,
+			   const float trans_drv_trn, const float miss_spd_gain, int curr_wp_type);
 
 	// uORB subscriptions
-	uORB::Subscription _actuator_motors_sub{ORB_ID(actuator_motors)};
-	uORB::Subscription _rover_steering_setpoint_sub{ORB_ID(rover_steering_setpoint)};
-	uORB::Subscription _rover_throttle_setpoint_sub{ORB_ID(rover_throttle_setpoint)};
+	uORB::Subscription _vehicle_local_position_sub{ORB_ID(vehicle_local_position)};
+	uORB::Subscription _position_setpoint_triplet_sub{ORB_ID(position_setpoint_triplet)};
 
 	// uORB publications
-	uORB::Publication<actuator_motors_s> 	     _actuator_motors_pub{ORB_ID(actuator_motors)};
+	uORB::Publication<rover_position_setpoint_s>    _rover_position_setpoint_pub{ORB_ID(rover_position_setpoint)};
 
-	// Variables
-	hrt_abstime _timestamp{0};
-	float _throttle_setpoint{NAN};
-	float _speed_diff_setpoint{NAN};
-
-	// Controllers
-	SlewRate<float> _adjusted_throttle_setpoint{0.f};
-
-	// Parameters
 	DEFINE_PARAMETERS(
-		(ParamInt<px4::params::CA_R_REV>) _param_r_rev,
-		(ParamFloat<px4::params::RO_ACCEL_LIM>) _param_ro_accel_limit,
-		(ParamFloat<px4::params::RO_DECEL_LIM>) _param_ro_decel_limit,
-		(ParamFloat<px4::params::RO_MAX_THR_SPEED>) _param_ro_max_thr_speed
+		(ParamFloat<px4::params::RO_SPEED_LIM>)     _param_ro_speed_limit,
+		(ParamFloat<px4::params::RD_TRANS_DRV_TRN>) _param_rd_trans_drv_trn,
+		(ParamFloat<px4::params::RD_MISS_SPD_GAIN>) _param_rd_miss_spd_gain
 	)
 };

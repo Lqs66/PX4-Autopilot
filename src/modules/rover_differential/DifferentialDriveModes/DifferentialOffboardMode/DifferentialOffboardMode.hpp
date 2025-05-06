@@ -37,40 +37,38 @@
 #include <px4_platform_common/module_params.h>
 
 // Libraries
-#include <lib/rover_control/RoverControl.hpp>
-#include <lib/slew_rate/SlewRate.hpp>
 #include <math.h>
+#include <matrix/matrix/math.hpp>
 
 // uORB includes
 #include <uORB/Subscription.hpp>
 #include <uORB/Publication.hpp>
-#include <uORB/topics/actuator_motors.h>
-#include <uORB/topics/rover_steering_setpoint.h>
-#include <uORB/topics/rover_throttle_setpoint.h>
-#include <uORB/topics/manual_control_setpoint.h>
+#include <uORB/topics/rover_rate_setpoint.h>
+#include <uORB/topics/rover_attitude_setpoint.h>
+#include <uORB/topics/rover_velocity_setpoint.h>
+#include <uORB/topics/rover_position_setpoint.h>
+#include <uORB/topics/offboard_control_mode.h>
+#include <uORB/topics/trajectory_setpoint.h>
+
+using namespace matrix;
 
 /**
- * @brief Class for differential actuator control.
+ * @brief Class for ackermann manual mode.
  */
-class DifferentialActControl : public ModuleParams
+class DifferentialOffboardMode : public ModuleParams
 {
 public:
 	/**
-	 * @brief Constructor for DifferentialActControl.
+	 * @brief Constructor for DifferentialOffboardMode.
 	 * @param parent The parent ModuleParams object.
 	 */
-	DifferentialActControl(ModuleParams *parent);
-	~DifferentialActControl() = default;
+	DifferentialOffboardMode(ModuleParams *parent);
+	~DifferentialOffboardMode() = default;
 
 	/**
-	 * @brief Generate and publish actuatorMotors setpoints from roverThrottleSetpoint/roverSteeringSetpoint.
+	 * @brief Generate and publish roverSetpoints from trajectorySetpoint.
 	 */
-	void updateActControl();
-
-	/**
-	 * @brief Stop the vehicle by sending 0 commands to motors and servos.
-	 */
-	void stopVehicle();
+	void offboardControl();
 
 protected:
 	/**
@@ -79,35 +77,13 @@ protected:
 	void updateParams() override;
 
 private:
-	/**
-	 * @brief Compute normalized motor commands based on normalized setpoints.
-	 * @param throttle Normalized speed in body x direction [-1, 1].
-	 * @param speed_diff_normalized Speed difference between left and right wheels [-1, 1].
-	 * @return Motor speeds for the right and left motors [-1, 1].
-	 */
-	Vector2f computeInverseKinematics(float throttle, float speed_diff_normalized);
-
 	// uORB subscriptions
-	uORB::Subscription _actuator_motors_sub{ORB_ID(actuator_motors)};
-	uORB::Subscription _rover_steering_setpoint_sub{ORB_ID(rover_steering_setpoint)};
-	uORB::Subscription _rover_throttle_setpoint_sub{ORB_ID(rover_throttle_setpoint)};
+	uORB::Subscription _trajectory_setpoint_sub{ORB_ID(trajectory_setpoint)};
+	uORB::Subscription _offboard_control_mode_sub{ORB_ID(offboard_control_mode)};
 
 	// uORB publications
-	uORB::Publication<actuator_motors_s> 	     _actuator_motors_pub{ORB_ID(actuator_motors)};
-
-	// Variables
-	hrt_abstime _timestamp{0};
-	float _throttle_setpoint{NAN};
-	float _speed_diff_setpoint{NAN};
-
-	// Controllers
-	SlewRate<float> _adjusted_throttle_setpoint{0.f};
-
-	// Parameters
-	DEFINE_PARAMETERS(
-		(ParamInt<px4::params::CA_R_REV>) _param_r_rev,
-		(ParamFloat<px4::params::RO_ACCEL_LIM>) _param_ro_accel_limit,
-		(ParamFloat<px4::params::RO_DECEL_LIM>) _param_ro_decel_limit,
-		(ParamFloat<px4::params::RO_MAX_THR_SPEED>) _param_ro_max_thr_speed
-	)
+	uORB::Publication<rover_rate_setpoint_s> _rover_rate_setpoint_pub{ORB_ID(rover_rate_setpoint)};
+	uORB::Publication<rover_attitude_setpoint_s> _rover_attitude_setpoint_pub{ORB_ID(rover_attitude_setpoint)};
+	uORB::Publication<rover_velocity_setpoint_s> _rover_velocity_setpoint_pub{ORB_ID(rover_velocity_setpoint)};
+	uORB::Publication<rover_position_setpoint_s> _rover_position_setpoint_pub{ORB_ID(rover_position_setpoint)};
 };
