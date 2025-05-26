@@ -113,6 +113,9 @@ void OutputPredictor::reset()
 	_delta_vel_sum.setZero();
 	_delta_vel_dt = 0.f;
 
+	_delta_angle_sum.setIdentity();
+	_delta_angle_sum_dt = 0.f;
+
 	_delta_angle_corr.setZero();
 
 	_vel_err_integ.setZero();
@@ -244,6 +247,10 @@ void OutputPredictor::calculateOutputStates(const uint64_t time_us, const Vector
 		// rotate the relative velocity into earth frame
 		_vel_imu_rel_body_ned = _R_to_earth_now * vel_imu_rel_body;
 	}
+
+	_delta_angle_sum *= Quatf(AxisAnglef(delta_angle - delta_angle_bias_scaled));
+	_delta_angle_sum.normalize();
+	_delta_angle_sum_dt += delta_angle_dt;
 
 	// update auxiliary yaw estimate
 	// rotate the state quternion by the delta quaternion only corrected for bias without EKF corrections
@@ -411,4 +418,14 @@ void OutputPredictor::resetVelocityDerivativeAccumulation()
 {
 	_delta_vel_dt = 0.f;
 	_delta_vel_sum.setZero();
+}
+
+Vector3f OutputPredictor::getAngularVelocityAndResetAccumulator()
+{
+	const Vector3f angular_velocity = AxisAnglef(_delta_angle_sum) / _delta_angle_sum_dt;
+
+	_delta_angle_sum.setIdentity();
+	_delta_angle_sum_dt = 0.f;
+
+	return angular_velocity;
 }
